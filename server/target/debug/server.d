@@ -1,1 +1,1 @@
-/home/amine/project/White_Board/server/target/debug/server: /home/amine/project/White_Board/server/src/main.rs /home/amine/project/White_Board/server/src/server.rs /home/amine/project/White_Board/server/src/window.rs
+/home/amine/project/White_Board/server/target/debug/server: /home/amine/project/White_Board/server/src/main.rs /home/amine/project/White_Board/server/src/server.rs /home/amine/project/White_Board/server/src/window.rs /home/amine/project/White_Board/shared/src/lib.rs

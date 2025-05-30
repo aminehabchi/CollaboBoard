@@ -8,6 +8,9 @@ use std::sync::{Arc, Mutex};
 mod server;
 use server::*;
 
+
+use shared::*;
+
 mod window;
 use window::*;
 

@@ -9,3 +9,4 @@ macroquad = "0.3"
 bincode = "1"
 serde = { version = "1", features = ["derive"] }
 anyhow = "1.0"
+shared = { path = "../shared" }

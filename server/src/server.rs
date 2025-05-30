@@ -9,26 +9,11 @@ use serde::{Serialize, Deserialize};
 use bincode;
 use std::sync::{Arc, Mutex};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Shapes {
-    pub strokes: Vec<Vec<(f32, f32)>>,
-    pub rectangles: Vec<Vec<(f32, f32)>>,
-    pub circles: Vec<Vec<(f32, f32)>>,
-    pub lines: Vec<Vec<(f32, f32)>>,
-}
-
-impl Shapes {
-    pub fn new() -> Self {
-        Shapes {
-            strokes: vec![],
-            rectangles: vec![],
-            circles: vec![],
-            lines: vec![],
-        }
-    }
-}
+use shared::*;
 
 type SharedClient = Arc<AsyncMutex<TcpStream>>;
+
+
 
 pub async fn tcp_server(shared_shapes: Arc<Mutex<Shapes>>) -> Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8080").await?;
@@ -53,7 +38,7 @@ async fn update_client_window(
     clients_clone: Arc<AsyncMutex<Vec<SharedClient>>>,
     shapes_clone: Arc<Mutex<Shapes>>,
 ) {
-    let mut interval = time::interval(Duration::from_millis(16));
+    let mut interval = time::interval(Duration::from_millis(8));
     loop {
         interval.tick().await;
 

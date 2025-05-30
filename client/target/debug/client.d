@@ -1,1 +1,1 @@
-/home/amine/project/White_Board/client/target/debug/client: /home/amine/project/White_Board/client/src/main.rs
+/home/amine/project/White_Board/client/target/debug/client: /home/amine/project/White_Board/client/src/drawing.rs /home/amine/project/White_Board/client/src/main.rs /home/amine/project/White_Board/shared/src/lib.rs
