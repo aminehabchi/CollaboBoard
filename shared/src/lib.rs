@@ -1,6 +1,4 @@
 use serde::{Serialize, Deserialize};
-use bincode;
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Shapes {
