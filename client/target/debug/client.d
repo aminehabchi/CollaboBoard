@@ -1,1 +1,0 @@
-/home/achr42/workspace/White_Board/client/target/debug/client: /home/achr42/workspace/White_Board/client/src/drawing.rs /home/achr42/workspace/White_Board/client/src/main.rs /home/achr42/workspace/White_Board/shared/src/lib.rs
