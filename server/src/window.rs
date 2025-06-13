@@ -1,9 +1,18 @@
+use serde::{ Serialize };
 use macroquad::prelude::*;
-use std::sync::{Arc, Mutex};
+use std::sync::{ Arc, Mutex };
 
+use tokio::{
+    runtime::Runtime,
+    net::{ TcpListener, TcpStream },
+    io::AsyncWriteExt,
+    sync::Mutex as AsyncMutex,
+    time::{ self, Duration },
+};
 
 use shared::*;
 
+#[derive(Serialize, Debug, Clone)]
 pub enum Mod {
     Pen,
     Rectangle,
@@ -13,84 +22,139 @@ pub enum Mod {
     Line,
 }
 
-pub const TOP: f32 = 54.0;
-const TOP_COLOR: Color = WHITE; // Or any color you want
+#[derive(Serialize, Debug, Clone)]
+pub struct Data {
+    mode: Mod,
+    last: Vec<(f32, f32)>,
+}
 
-pub async fn update_window(shared_shapes:&mut Arc<Mutex<Shapes>>) -> anyhow::Result<()> {
-    let mut current_mod = Mod::CircleLines;
-    let pen = load_texture("pen.png").await.unwrap();
-    loop {
-            clear_background(TOP_COLOR);
-        /*****************************************/
-            let mut shapes = shared_shapes.lock().unwrap();
-        /*****************************************/
-                listener(&mut current_mod);
-                navbar(&pen);
-        /*****************************************/
-            if is_key_down(KeyCode::Space) {
-                clean_screen(&mut shapes);
-            }
-        /*****************************************/
-            match current_mod {
-                Mod::Pen=>pen_mod(&mut shapes.strokes),
-                Mod::Rectangle=>get_2_point_mod(&mut shapes.rectangles),
-                Mod::RectangleLines=>get_2_point_mod(&mut shapes.rectangles_lines),
-                Mod::Circle=>get_2_point_mod(&mut shapes.circles),
-                Mod::CircleLines=>get_2_point_mod(&mut shapes.circles_lines),
-                Mod::Line=>get_2_point_mod(&mut shapes.lines),
-                _ => {}
-            }
-        /*****************************************/
-            draw_all_shapes(&shapes);
-        /*****************************************/
-            next_frame().await;
+pub async fn send_data(data: Data, clients: Arc<AsyncMutex<Vec<TcpStream>>>) {
+    println!("---> {:?}", data);
+    let encoded = match bincode::serialize(&data) {
+        Ok(buf) => buf,
+        Err(e) => {
+            eprintln!("Serialization error: {}", e);
+            return;
+        }
+    };
+
+    let len = encoded.len() as u32;
+    let len_bytes = len.to_be_bytes(); // 4 bytes, big-endian
+
+    let mut locked_clients = clients.lock().await;
+
+    // Send to all clients
+    for stream in locked_clients.iter_mut() {
+        // First send the size
+        if let Err(e) = stream.write_all(&len_bytes).await {
+            eprintln!("Failed to send size to a client: {}", e);
+            continue;
+        }
+
+        // Then send the actual data
+        if let Err(e) = stream.write_all(&encoded).await {
+            eprintln!("Failed to send data to a client: {}", e);
+        }
     }
 }
 
+pub async fn update_window(
+    shared_shapes: Arc<tokio::sync::Mutex<Shapes>>,
+    clients: Arc<AsyncMutex<Vec<TcpStream>>>
+) -> anyhow::Result<()> {
+    let mut current_mod = Mod::Circle;
+    let pen = load_texture("pen.png").await.unwrap();
 
+    loop {
+        clear_background(TOP_COLOR);
 
-fn pen_mod(strokes :&mut Vec<Vec<(f32, f32)>>){
+        // Async lock
+        let mut shapes = shared_shapes.lock().await;
+
+        listener(&mut current_mod);
+        navbar(&pen);
+
+        if is_key_down(KeyCode::Space) {
+            clean_screen(&mut shapes);
+        }
+
+        let last_shape: Option<Vec<(f32, f32)>> = match current_mod {
+            Mod::Pen => pen_mod(&mut shapes.strokes),
+            Mod::Rectangle => get_2_point_mod(&mut shapes.rectangles),
+            Mod::RectangleLines => get_2_point_mod(&mut shapes.rectangles_lines),
+            Mod::Circle => get_2_point_mod(&mut shapes.circles),
+            Mod::CircleLines => get_2_point_mod(&mut shapes.circles_lines),
+            Mod::Line => get_2_point_mod(&mut shapes.lines),
+            _ => None,
+        };
+
+        match last_shape {
+            Some(last) => {
+                println!("{:?}",last);
+                send_data(
+                    Data {
+                        last,
+                        mode: current_mod.clone(),
+                    },
+                    clients.clone()
+                ).await;
+            }
+            None => {}
+        }
+
+        draw_all_shapes(&shapes);
+
+        next_frame().await;
+    }
+}
+
+pub const TOP: f32 = 54.0;
+const TOP_COLOR: Color = WHITE;
+fn pen_mod(strokes: &mut Vec<Vec<(f32, f32)>>) -> Option<Vec<(f32, f32)>> {
     /*****************************************/
     if is_mouse_button_down(MouseButton::Left) {
         let mouse_pos = mouse_position();
-        if mouse_pos.1>TOP{
+        if mouse_pos.1 > TOP {
             strokes.last_mut().unwrap().push(mouse_pos);
-        }else{
+        } else {
             strokes.push(vec![]);
         }
-    } else  {
+    } else {
         strokes.push(vec![]);
+        if strokes.len()>1{
+            return Some(strokes[strokes.len() - 2].clone());
+        }else{
+            return Some(strokes[strokes.len() - 1].clone());
+        }
     }
+    return None;
 }
 
-
-
-fn get_2_point_mod(lines: &mut Vec<Vec<(f32, f32)>>) {
+fn get_2_point_mod(lines: &mut Vec<Vec<(f32, f32)>>) -> Option<Vec<(f32, f32)>> {
     let mouse_pos = mouse_position();
     if mouse_pos.1 < TOP {
-        return;
+        return None;
     }
-    if lines.len()==0{
+    if lines.len() == 0 {
         lines.push(vec![]);
     }
-    let mut last=lines.last_mut().unwrap();
-    
+    let mut last = lines.last_mut().unwrap();
+
     if is_mouse_button_down(MouseButton::Left) {
-        if last.len()==2{
-            last[1]=mouse_pos;
-        }else if last.len()==0{
+        if last.len() == 2 {
+            last[1] = mouse_pos;
+        } else if last.len() == 0 {
             last.push(mouse_pos);
             last.push(mouse_pos);
         }
-    }else{
-        if last.len()==2{
+    } else {
+        if last.len() == 2 {
             lines.push(vec![]);
-        }   
+            return Some(lines[lines.len() - 2].clone());
+        }
     }
+    None
 }
-
-
-
 
 fn navbar(pen: &Texture2D) {
     let screen_w = screen_width();
@@ -106,16 +170,10 @@ fn navbar(pen: &Texture2D) {
 
     // Pen Tool - Sky Blue
     draw_rectangle(start_x, y, button_size, button_size, Color::from_rgba(96, 165, 250, 255));
-    draw_texture_ex(
-        pen,
-        start_x + 6.0,
-        y + 6.0,
-        WHITE,
-        DrawTextureParams {
-            dest_size: Some(vec2(24.0, 24.0)),
-            ..Default::default()
-        },
-    );
+    draw_texture_ex(pen, start_x + 6.0, y + 6.0, WHITE, DrawTextureParams {
+        dest_size: Some(vec2(24.0, 24.0)),
+        ..Default::default()
+    });
 
     // Rectangle Tool - Peach
     let rect_x = start_x + button_size + padding;
@@ -131,7 +189,7 @@ fn navbar(pen: &Texture2D) {
         24.0,
         24.0,
         2.0,
-        Color::from_rgba(255, 112, 67, 255),
+        Color::from_rgba(255, 112, 67, 255)
     );
 
     // Circle Tool - Mint Green
@@ -141,18 +199,24 @@ fn navbar(pen: &Texture2D) {
         circle_x + button_size / 2.0,
         y + button_size / 2.0,
         12.0,
-        Color::from_rgba(0, 128, 0, 255),
+        Color::from_rgba(0, 128, 0, 255)
     );
 
     // Circle Line Tool - Light Green Outline
     let circle_line_x = circle_x + button_size + padding;
-    draw_rectangle(circle_line_x, y, button_size, button_size, Color::from_rgba(200, 255, 200, 255));
+    draw_rectangle(
+        circle_line_x,
+        y,
+        button_size,
+        button_size,
+        Color::from_rgba(200, 255, 200, 255)
+    );
     draw_circle_lines(
         circle_line_x + button_size / 2.0,
         y + button_size / 2.0,
         12.0,
         2.0,
-        Color::from_rgba(0, 100, 0, 255),
+        Color::from_rgba(0, 100, 0, 255)
     );
 
     // Line Tool - Lavender Purple
@@ -164,7 +228,7 @@ fn navbar(pen: &Texture2D) {
         line_x + 30.0,
         y + 30.0,
         3.0,
-        Color::from_rgba(123, 31, 162, 255),
+        Color::from_rgba(123, 31, 162, 255)
     );
 }
 fn listener(current_mod: &mut Mod) {
@@ -206,7 +270,7 @@ fn listener(current_mod: &mut Mod) {
     bx += button_size + padding;
     let cx = bx + button_size / 2.0;
     let cy = top_y + button_size / 2.0;
-    if (x - cx).powi(2) + (y - cy).powi(2) <= 12.0f32.powi(2) {
+    if (x - cx).powi(2) + (y - cy).powi(2) <= (12.0f32).powi(2) {
         *current_mod = Mod::Circle;
         return;
     }
@@ -215,7 +279,7 @@ fn listener(current_mod: &mut Mod) {
     bx += button_size + padding;
     let cx = bx + button_size / 2.0;
     let cy = top_y + button_size / 2.0;
-    if (x - cx).powi(2) + (y - cy).powi(2) <= 12.0f32.powi(2) {
+    if (x - cx).powi(2) + (y - cy).powi(2) <= (12.0f32).powi(2) {
         *current_mod = Mod::CircleLines;
         return;
     }
@@ -232,5 +296,3 @@ fn listener(current_mod: &mut Mod) {
 fn point_in_rect(x: f32, y: f32, rx: f32, ry: f32, w: f32, h: f32) -> bool {
     x >= rx && x <= rx + w && y >= ry && y <= ry + h
 }
-
-
