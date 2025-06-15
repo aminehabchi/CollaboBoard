@@ -24,11 +24,10 @@ async fn main() {
     let clients_clone = Arc::clone(&clients);
     let shapes_clone = Arc::clone(&shapes);
 
-     let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new().unwrap();
     rt.spawn(async move {
         tcp_server(clients_clone).await.unwrap();
     });
 
-    update_window(shapes,clients).await.expect("REASON");
+    update_window(shapes, clients).await.expect("REASON");
 }
-

@@ -1,4 +1,4 @@
-use serde::{ Serialize };
+use serde::{ Serialize, Deserialize };
 use macroquad::prelude::*;
 use std::sync::{ Arc, Mutex };
 
@@ -23,13 +23,20 @@ pub enum Mod {
 }
 
 #[derive(Serialize, Debug, Clone)]
+pub enum Type {
+    Release,
+    Clean,
+    Click,
+}
+
+#[derive(Serialize, Debug, Clone)]
 pub struct Data {
     mode: Mod,
-    last: Vec<(f32, f32)>,
+    draw_mode: Type,
+    last: (f32, f32),
 }
 
 pub async fn send_data(data: Data, clients: Arc<AsyncMutex<Vec<TcpStream>>>) {
-    println!("---> {:?}", data);
     let encoded = match bincode::serialize(&data) {
         Ok(buf) => buf,
         Err(e) => {
@@ -62,7 +69,7 @@ pub async fn update_window(
     shared_shapes: Arc<tokio::sync::Mutex<Shapes>>,
     clients: Arc<AsyncMutex<Vec<TcpStream>>>
 ) -> anyhow::Result<()> {
-    let mut current_mod = Mod::Circle;
+    let mut current_mod = Mod::Rectangle;
     let pen = load_texture("pen.png").await.unwrap();
 
     loop {
@@ -75,29 +82,32 @@ pub async fn update_window(
         navbar(&pen);
 
         if is_key_down(KeyCode::Space) {
+            send_data(
+                Data {
+                    mode: current_mod.clone(),
+                    draw_mode: Type::Clean,
+                    last: (1.0, 0.0),
+                },
+                clients.clone()
+            ).await;
             clean_screen(&mut shapes);
         }
 
-        let last_shape: Option<Vec<(f32, f32)>> = match current_mod {
-            Mod::Pen => pen_mod(&mut shapes.strokes),
-            Mod::Rectangle => get_2_point_mod(&mut shapes.rectangles),
-            Mod::RectangleLines => get_2_point_mod(&mut shapes.rectangles_lines),
-            Mod::Circle => get_2_point_mod(&mut shapes.circles),
-            Mod::CircleLines => get_2_point_mod(&mut shapes.circles_lines),
-            Mod::Line => get_2_point_mod(&mut shapes.lines),
+        let last_shape: Option<Data> = match current_mod {
+            Mod::Pen => pen_mod(&mut shapes.strokes, current_mod.clone()),
+            Mod::Rectangle => get_2_point_mod(&mut shapes.rectangles, current_mod.clone()),
+            Mod::RectangleLines =>
+                get_2_point_mod(&mut shapes.rectangles_lines, current_mod.clone()),
+            Mod::Circle => get_2_point_mod(&mut shapes.circles, current_mod.clone()),
+            Mod::CircleLines => get_2_point_mod(&mut shapes.circles_lines, current_mod.clone()),
+            Mod::Line => get_2_point_mod(&mut shapes.lines, current_mod.clone()),
             _ => None,
         };
 
         match last_shape {
-            Some(last) => {
-                println!("{:?}",last);
-                send_data(
-                    Data {
-                        last,
-                        mode: current_mod.clone(),
-                    },
-                    clients.clone()
-                ).await;
+            Some(mut data) => {
+                data.mode = current_mod.clone();
+                send_data(data, clients.clone()).await;
             }
             None => {}
         }
@@ -110,52 +120,73 @@ pub async fn update_window(
 
 pub const TOP: f32 = 54.0;
 const TOP_COLOR: Color = WHITE;
-fn pen_mod(strokes: &mut Vec<Vec<(f32, f32)>>) -> Option<Vec<(f32, f32)>> {
+fn pen_mod(strokes: &mut Vec<Vec<(f32, f32)>>, mode: Mod) -> Option<Data> {
+    if strokes.is_empty() {
+        println!("first");
+        strokes.push(vec![]);
+        return None;
+    }
     /*****************************************/
     if is_mouse_button_down(MouseButton::Left) {
         let mouse_pos = mouse_position();
         if mouse_pos.1 > TOP {
             strokes.last_mut().unwrap().push(mouse_pos);
-        } else {
-            strokes.push(vec![]);
+            return Some(Data { mode: mode.clone(), draw_mode: Type::Click, last: mouse_pos });
         }
     } else {
-        strokes.push(vec![]);
-        if strokes.len()>1{
-            return Some(strokes[strokes.len() - 2].clone());
-        }else{
-            return Some(strokes[strokes.len() - 1].clone());
+        if strokes.last_mut().unwrap().len() > 0 {
+            strokes.push(vec![]);
+            return Some(Data { mode: mode.clone(), draw_mode: Type::Release, last: (0.0, 0.0) });
         }
     }
     return None;
 }
 
-fn get_2_point_mod(lines: &mut Vec<Vec<(f32, f32)>>) -> Option<Vec<(f32, f32)>> {
+pub fn get_2_point_mod(shapes: &mut Vec<Vec<(f32, f32)>>, mode: Mod) -> Option<Data> {
     let mouse_pos = mouse_position();
+
     if mouse_pos.1 < TOP {
         return None;
     }
-    if lines.len() == 0 {
-        lines.push(vec![]);
-    }
-    let mut last = lines.last_mut().unwrap();
 
-    if is_mouse_button_down(MouseButton::Left) {
-        if last.len() == 2 {
-            last[1] = mouse_pos;
-        } else if last.len() == 0 {
-            last.push(mouse_pos);
-            last.push(mouse_pos);
+    let left_down = is_mouse_button_down(MouseButton::Left);
+
+    if shapes.is_empty() {
+        shapes.push(vec![]);
+        return Some(Data { mode: mode.clone(), draw_mode: Type::Release, last: mouse_pos });
+    }
+
+    // Handle mouse down case
+    if left_down {
+        let last = shapes.last_mut().unwrap();
+        match last.len() {
+            0 => {
+                last.push(mouse_pos);
+                last.push(mouse_pos);
+                Some(Data { mode: mode.clone(), draw_mode: Type::Release, last: mouse_pos })
+            }
+            1 => {
+                last.push(mouse_pos);
+                Some(Data { mode: mode.clone(), draw_mode: Type::Click, last: mouse_pos })
+            }
+            2 => {
+                last[1] = mouse_pos;
+                Some(Data { mode: mode.clone(), draw_mode: Type::Click, last: mouse_pos })
+            }
+            _ => None,
         }
     } else {
-        if last.len() == 2 {
-            lines.push(vec![]);
-            return Some(lines[lines.len() - 2].clone());
+        // Handle mouse up case - check if we have a complete shape
+        if let Some(last) = shapes.last() {
+            if last.len() == 2 {
+                let last_point = last[1];
+                shapes.push(vec![]);
+                return Some(Data { mode: mode.clone(), draw_mode: Type::Click, last: last_point });
+            }
         }
+        None
     }
-    None
 }
-
 fn navbar(pen: &Texture2D) {
     let screen_w = screen_width();
 
