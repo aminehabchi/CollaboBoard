@@ -1,11 +1,7 @@
-use macroquad::prelude::*;
-use std::sync::{ Arc, Mutex };
+use std::sync::{ Arc };
 use tokio::{
-    runtime::Runtime,
-    net::{ TcpListener, TcpStream },
-    io::AsyncWriteExt,
+    net::{ TcpStream },
     sync::Mutex as AsyncMutex,
-    time::{ self, Duration },
 };
 
 mod server;
@@ -22,7 +18,6 @@ async fn main() {
     let shapes = Arc::new(AsyncMutex::new(Shapes::new()));
 
     let clients_clone = Arc::clone(&clients);
-    let shapes_clone = Arc::clone(&shapes);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.spawn(async move {
