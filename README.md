@@ -4,6 +4,13 @@ WhiteBoard is a collaborative, real-time whiteboard application written in Rust.
 
 ---
 
+## Example
+
+> Disclaimer: As you can see from this gif, my drawing skills are... let's just say "abstract" 🖍️😂  
+> Please focus on the app features, not my artistic abilities! 🎨🙈
+
+## ![WhiteBoard UI Example](./screenshot.gif)
+
 ## Features
 
 - **Real-time Drawing:** Multiple users can draw simultaneously, with updates synchronized across all connected clients.
@@ -72,14 +79,6 @@ cargo run
 - Use the navigation bar at the top to select between Pen, Rectangle, Rectangle Outline, Circle, Circle Outline, and Line.
 - Draw on the canvas using your mouse.
 - Press `Space` to clear the canvas for everyone.
-
----
-
-## Example
-> Disclaimer: As you can see from this gif, my drawing skills are... let's just say "abstract" 🖍️😂  
-> Please focus on the app features, not my artistic abilities! 🎨🙈
-
-![WhiteBoard UI Example](./screenshot.gif)
 
 ---
 
