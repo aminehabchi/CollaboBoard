@@ -1,6 +1,6 @@
-# WhiteBoard
+# CollaboBoard
 
-WhiteBoard is a collaborative, real-time whiteboard application written in Rust. It allows multiple users to draw together on a shared canvas over the network, supporting several drawing tools and synchronization between clients and a central server.
+CollaboBoard is a collaborative, real-time whiteboard application written in Rust. It allows multiple users to draw together on a shared canvas over the network, supporting several drawing tools and synchronization between clients and a central server.
 
 ---
 
@@ -9,7 +9,9 @@ WhiteBoard is a collaborative, real-time whiteboard application written in Rust.
 > Disclaimer: As you can see from this gif, my drawing skills are... let's just say "abstract" 🖍️😂  
 > Please focus on the app features, not my artistic abilities! 🎨🙈
 
-## ![WhiteBoard UI Example](./screenshot.gif)
+![WhiteBoard UI Example](./screenshot.gif)
+
+---
 
 ## Features
 
