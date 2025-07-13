@@ -50,7 +50,7 @@ The project consists of three main crates:
 Clone the repository, then build the shared, server, and client:
 
 ```bash
-git clone https://github.com/aminehabchi/White_Board.git
+git clone https://github.com/aminehabchi/CollaboBoard.git
 cd White_Board
 
 # Build shared library (optional, as used as a dependency)
@@ -87,7 +87,7 @@ cargo run
 ## Project Structure
 
 ```
-White_Board/
+CollaboBoard/
 ├── client/   # Client application (UI, drawing, network)
 ├── server/   # Server application (network, sync)
 ├── shared/   # Shared data models and drawing code
